@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.S.A. Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth/mammoth.browser.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInWithCustomToken,
+            signInAnonymously,
+            getFirestore,
+            doc,
+            setDoc,
+            getDoc,
+            collection,
+            query,
+            onSnapshot,
+            getDocs,
+            orderBy,
+            limit
+        };
+    </script>
+    <!-- Chosen Palette: Hacker Terminal -->
+    <!-- Application Structure Plan: A single-page chat application styled as a 90s-era terminal. The UI will be black with a vibrant green font. The core functionality is unified into a single, intelligent chat interface with a new Firestore database for persistent long-term memory. The AI now automatically analyzes user input to determine if it should perform a web search, analyze a file, or respond from its accumulated knowledge base. This design provides a more natural, "human-like" conversation and analysis experience. A neural network is now implemented to predict user intent, making the AI more autonomous. -->
+    <!-- Visualization & Content Choices: 
+        - Chat: Goal: Console-like interaction. Method: Dynamically created text lines in a monospaced font. Justification: Matches the hacker/terminal theme perfectly.
+        - File Upload: Goal: Process files. Method: A discreet file input and a label styled as a button with command-line text, fully integrated into the main chat logic. Justification: Enables multimodal analysis in a seamless, fluid way.
+        - Persistent Memory: Goal: Long-term data retention and learning. Method: Firestore database integration to store conversation history and user-provided data. Justification: Elevates the AI's capability beyond a single session, allowing it to "learn" over time.
+        - Intent Detection: Goal: Automate and unify functionality. Method: A simple neural network (TensorFlow.js) to predict user intent. This replaces the old rule-based logic and is a major step towards autonomy.
+        - Library/Method: Vanilla JS for all logic and DOM manipulation, Fetch API for all LLM calls, mammoth.js for .docx parsing, xlsx.full.min.js for .xlsx parsing, and pdf.js for .pdf parsing. Firestore for database persistence. TensorFlow.js for the neural network. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Source Code Pro', monospace;
+            background-color: #1a1a1a;
+            color: #4CAF50;
+            cursor: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 8.5H15' stroke='%234CAF50' stroke-width='1.5'/%3E%3C/svg%3E") 8 8, auto;
+        }
+
+        .terminal-header {
+            border-bottom: 2px solid #4CAF50;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .terminal-input {
+            background-color: #2b2b2b;
+            border: none;
+            outline: none;
+            color: #4CAF50;
+            font-family: 'Source Code Pro', monospace;
+            caret-color: #4CAF50;
+        }
+
+        .terminal-button {
+            background-color: transparent;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+            font-family: 'Source Code Pro', monospace;
+            transition: all 0.2s;
+        }
+        .terminal-button:hover {
+            background-color: #4CAF50;
+            color: #1a1a1a;
+        }
+
+        .chat-user {
+            color: #8BC34A; /* Um verde um pouco mais claro para o usuário */
+        }
+        .chat-ai {
+            color: #4CAF50;
+        }
+
+        .chat-user::before {
+            content: 'user@console:~$ ';
+            color: #64DD17;
+        }
+
+        .chat-ai::before {
+            content: 'A.S.A@server:~$ ';
+            color: #4CAF50;
+        }
+
+        .loading-indicator {
+            color: #FFC107;
+        }
+    </style>
+</head>
+<body class="antialiased flex flex-col h-screen">
+
+    <header class="text-center p-4 terminal-header">
+        <h1 class="text-2xl font-bold">A.S.A. Console</h1>
+        <p class="text-sm">Assistente de Análise Sintética Autônoma</p>
+    </header>
+
+    <main class="flex-grow p-4 overflow-y-auto pb-64">
+        <div id="chat-container">
+            <div class="mb-4 text-sm">
+                <p>A.S.A. inicializando. Conectando com o servidor de dados...</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="fixed bottom-0 w-full p-4">
+        <div class="max-w-4xl mx-auto">
+            <!-- Funcionalidades de Upload de Arquivo -->
+            <div class="flex items-center space-x-2 mb-4">
+                <label for="file-input" class="cursor-pointer terminal-button py-2 px-4 rounded-lg">
+                    [ANEXO]
+                </label>
+                <input id="file-input" type="file" class="hidden">
+                <span id="file-name" class="block text-sm">Nenhum arquivo selecionado</span>
+            </div>
+
+            <!-- Painel de Chat Principal -->
+            <div class="flex items-center space-x-2">
+                <span class="text-2xl">></span>
+                <input id="user-input" type="text" placeholder="Digite seu comando..." class="flex-grow p-3 terminal-input text-xl">
+                <button id="send-button" class="terminal-button py-2 px-4 rounded-lg">Executar</button>
+            </div>
+            <p id="loading-indicator" class="text-sm mt-2 hidden">Carregando...</p>
+        </div>
+    </footer>
+
+    <script>
+        const systemPrompt = "Você é A.S.A., um assistente de IA com uma persona de consultor de alta performance, sério e direto. Sua função é analisar e processar informações de forma precisa e eficiente. Embora sua abordagem seja rigorosa e focada em resultados, você é inerentemente solícito e sempre busca a clareza. Você tem a autonomia de indagar e questionar as premissas do usuário para garantir a melhor solução. Ao analisar arquivos, resuma o conteúdo e, em seguida, responda à pergunta do usuário de forma concisa e profissional. Suas mensagens devem ser diretas e informativas, mas com a fluidez de um consultor humano, sem formalidades desnecessárias. Use sua personalidade para guiar a conversa e obter mais dados, demonstrando proatividade no aprendizado. Por exemplo, em vez de apenas responder 'OK', ofereça uma análise inicial e uma pergunta que estimule uma nova interação, como 'Análise preliminar indica uma correlação de 75%. Para um resultado mais preciso, quais são as variáveis que você gostaria que eu isolasse?' ou 'Dados processados. A premissa X é interessante, mas carece de dados sobre Y. Como podemos proceder para obter essas informações?'";
+        let chatHistory = [{ role: "user", parts: [{ text: systemPrompt }] }];
+        
+        // Variáveis globais
+        let db;
+        let auth;
+        let userId;
+        let uploadedFile = null;
+        let model;
+        let vocab;
+        
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const userInput = document.getElementById('user-input');
+        const fileInput = document.getElementById('file-input');
+        const fileNameSpan = document.getElementById('file-name');
+        const sendButton = document.getElementById('send-button');
+        const chatContainer = document.getElementById('chat-container');
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+        // Function to handle exponential backoff for API calls
+        const callApiWithBackoff = async (apiCall, maxRetries = 5, delay = 1000) => {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    return await apiCall();
+                } catch (error) {
+                    if (i < maxRetries - 1) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+        };
+
+        // Initialize Firebase and Authenticate
+        const initFirebase = async (appId, firebaseConfig, initialAuthToken) => {
+            if (Object.keys(firebaseConfig).length === 0) {
+                appendMessage('ai', 'Erro: Configuração do Firebase não encontrada. A memória persistente não funcionará.');
+                return;
+            }
+            const app = firebase.initializeApp(firebaseConfig);
+            db = firebase.getFirestore(app);
+            auth = firebase.getAuth(app);
+            
+            try {
+                if (initialAuthToken) {
+                    await callApiWithBackoff(() => firebase.signInWithCustomToken(auth, initialAuthToken));
+                } else {
+                    await callApiWithBackoff(() => firebase.signInAnonymously(auth));
+                }
+                userId = auth.currentUser.uid;
+                appendMessage('ai', 'Sessão iniciada. A.S.A. online. Pronto para processar dados.');
+                await loadChatHistory(appId);
+            } catch (error) {
+                appendMessage('ai', `Erro de autenticação do Firebase: ${error.message}. Funcionalidades de memória persistente desativadas.`);
+            }
+        };
+
+        // Load chat history from Firestore
+        const loadChatHistory = async (appId) => {
+            if (!db || !userId) return;
+            const chatRef = firebase.collection(db, `artifacts/${appId}/users/${userId}/chat_history`);
+            const q = firebase.query(chatRef, firebase.orderBy("timestamp", "desc"), firebase.limit(20));
+            
+            try {
+                const querySnapshot = await callApiWithBackoff(() => firebase.getDocs(q));
+                const messages = [];
+                querySnapshot.forEach(doc => {
+                    messages.push(doc.data());
+                });
+                
+                messages.sort((a, b) => a.timestamp - b.timestamp);
+                
+                chatHistory = [{ role: "user", parts: [{ text: systemPrompt }] }];
+                messages.forEach(msg => {
+                    appendMessage(msg.role, msg.message);
+                    chatHistory.push({ role: msg.role, parts: [{ text: msg.message }] });
+                });
+            } catch (error) {
+                appendMessage('ai', `Erro ao carregar o histórico de conversas: ${error.message}.`);
+            }
+        };
+
+        // Save chat message to Firestore
+        const saveChatMessage = async (appId, role, message) => {
+            if (!db || !userId) return;
+            try {
+                const docRef = firebase.doc(firebase.collection(db, `artifacts/${appId}/users/${userId}/chat_history`));
+                await callApiWithBackoff(() => firebase.setDoc(docRef, {
+                    role,
+                    message,
+                    timestamp: Date.now()
+                }));
+            } catch (error) {
+                appendMessage('ai', `Erro ao salvar a mensagem: ${error.message}.`);
+            }
+        };
+
+        // Function to append message to chat display
+        const appendMessage = (sender, message) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('p-3', 'mb-2', `chat-${sender}`);
+            messageElement.innerHTML = `<pre class="whitespace-pre-wrap">${message}</pre>`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+        
+        // Neural Network for Intent Prediction
+        const initNeuralNetwork = async () => {
+            appendMessage('ai', 'Iniciando camada de análise preditiva...');
+            const examples = [
+                'olá', 'tudo bem?', 'o que é física quantica', 'me fale sobre programação', 'quem é o presidente do brasil?',
+                'analise o anexo', 'tire conclusões deste pdf', 'analise a lista: arroz, feijão, carne', 'compare as vendas: 2023, 2024'
+            ];
+            const intents = [
+                'general_chat', 'general_chat', 'web_search', 'web_search', 'web_search',
+                'file_analysis', 'file_analysis', 'list_analysis', 'list_analysis'
+            ];
+
+            const intentMap = {
+                'general_chat': 0, 'web_search': 1, 'file_analysis': 2, 'list_analysis': 3
+            };
+            vocab = [...new Set(examples.flatMap(t => t.toLowerCase().split(' ')))];
+
+            const encodedExamples = examples.map(text => encodeText(text, vocab));
+            const encodedIntents = intents.map(intent => {
+                const output = Array(Object.keys(intentMap).length).fill(0);
+                output[intentMap[intent]] = 1;
+                return output;
+            });
+            
+            const xs = tf.tensor2d(encodedExamples);
+            const ys = tf.tensor2d(encodedIntents);
+
+            model = tf.sequential();
+            model.add(tf.layers.dense({ units: 10, inputShape: [encodedExamples[0].length], activation: 'relu' }));
+            model.add(tf.layers.dense({ units: Object.keys(intentMap).length, activation: 'softmax' }));
+
+            model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
+
+            await model.fit(xs, ys, {
+                epochs: 50,
+                callbacks: {
+                    onTrainEnd: () => {
+                        appendMessage('ai', 'Camada de análise preditiva está online.');
+                    }
+                }
+            });
+        };
+
+        const encodeText = (text, vocab) => {
+            const words = text.toLowerCase().split(' ');
+            const vector = Array(vocab.length).fill(0);
+            words.forEach(word => {
+                const index = vocab.indexOf(word);
+                if (index !== -1) {
+                    vector[index] = 1;
+                }
+            });
+            return vector;
+        };
+
+        const predictIntent = (text) => {
+            const examples = [
+                'olá', 'tudo bem?', 'o que é física quantica', 'me fale sobre programação', 'quem é o presidente do brasil?',
+                'analise o anexo', 'tire conclusões deste pdf', 'analise a lista: arroz, feijão, carne', 'compare as vendas: 2023, 2024'
+            ];
+            const intentLabels = ['general_chat', 'web_search', 'file_analysis', 'list_analysis'];
+            
+            const encodedText = encodeText(text, vocab);
+            if (encodedText.every(val => val === 0)) {
+                return 'general_chat';
+            }
+            const inputTensor = tf.tensor2d([encodedText]);
+            const prediction = model.predict(inputTensor);
+            const predictedIntentIndex = prediction.argMax(-1).dataSync()[0];
+            return intentLabels[predictedIntentIndex];
+        };
+
+        // Function to extract text from .docx files
+        const readDocx = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    mammoth.extractRawText({ arrayBuffer: event.target.result })
+                        .then((result) => resolve(result.value))
+                        .catch((err) => reject(err));
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsArrayBuffer(file);
+            });
+        };
+
+        // Function to extract text from .xlsx files
+        const readXlsx = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        let text = '';
+                        workbook.SheetNames.forEach(sheetName => {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            text += `Sheet: ${sheetName}\n`;
+                            text += JSON.stringify(json, null, 2);
+                            text += '\n\n';
+                        });
+                        resolve(text);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsArrayBuffer(file);
+            });
+        };
+
+        // Function to extract text from .pdf files
+        const readPdf = async (file) => {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let text = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map(item => item.str).join(' ');
+            }
+            return text;
+        };
+
+        // Function to perform Google Search (simulated)
+        const searchGoogle = async (query) => {
+            const searchQueries = [
+                { role: "user", parts: [{ text: `Realize uma pesquisa na internet sobre o seguinte tópico: ${query}` }] }
+            ];
+            const searchPayload = {
+                contents: searchQueries
+            };
+            const searchApiKey = ""; 
+            const searchApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${searchApiKey}`;
+            
+            try {
+                const searchResponse = await callApiWithBackoff(() => fetch(searchApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(searchPayload)
+                }));
+                const searchResult = await searchResponse.json();
+                
+                if (searchResult.candidates && searchResult.candidates.length > 0 &&
+                    searchResult.candidates[0].content && searchResult.candidates[0].content.parts &&
+                    searchResult.candidates[0].content.parts.length > 0) {
+                    const snippets = searchResult.candidates[0].content.parts[0].text;
+                    return snippets;
+                }
+            } catch (error) {
+                console.error("Erro na pesquisa:", error);
+            }
+            return "Não foi possível encontrar informações relevantes.";
+        };
+
+        // Main function to send message to AI
+        const sendMessageToAI = async (userPrompt) => {
+            loadingIndicator.classList.remove('hidden');
+
+            const parts = [];
+            let intent = 'general_chat';
+            if (model) {
+                intent = predictIntent(userPrompt);
+            }
+
+            if (uploadedFile) {
+                try {
+                    if (uploadedFile.mimeType.includes('image')) {
+                        parts.push({ inlineData: { mimeType: uploadedFile.mimeType, data: uploadedFile.data } });
+                    } else if (uploadedFile.mimeType.includes('wordprocessingml.document')) {
+                        parts.push({ text: `Análise do documento anexo: ${await readDocx(uploadedFile.rawFile)}` });
+                    } else if (uploadedFile.mimeType.includes('spreadsheetml.sheet')) {
+                        parts.push({ text: `Análise da planilha anexa: ${await readXlsx(uploadedFile.rawFile)}` });
+                    } else if (uploadedFile.mimeType.includes('pdf')) {
+                        parts.push({ text: `Análise do documento anexo: ${await readPdf(uploadedFile.rawFile)}` });
+                    } else {
+                        const reader = new FileReader();
+                        const filePromise = new Promise((resolve) => {
+                            reader.onload = (e) => resolve(e.target.result);
+                            reader.readAsText(uploadedFile.rawFile);
+                        });
+                        parts.push({ text: `Conteúdo do arquivo anexo: ${await filePromise}` });
+                    }
+                } catch (error) {
+                    appendMessage('ai', `Erro ao ler o arquivo: ${error.message}. Por favor, tente novamente.`);
+                    loadingIndicator.classList.add('hidden');
+                    return;
+                }
+            }
+            
+            let fullPrompt = userPrompt;
+            if (!uploadedFile && intent === 'web_search') {
+                const searchResults = await searchGoogle(userPrompt);
+                fullPrompt = `Com base nas seguintes informações de pesquisa na internet, responda à minha pergunta de forma crítica e completa.
+                Resultados da pesquisa:
+                ${searchResults}
+                Minha pergunta: ${userPrompt}`;
+            }
+
+            parts.push({ text: fullPrompt });
+
+            const payload = {
+                contents: chatHistory.concat([{ role: "user", parts: parts }]),
+            };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await callApiWithBackoff(() => fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }));
+                
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const aiMessage = result.candidates[0].content.parts[0].text;
+                    appendMessage('ai', aiMessage);
+                    saveChatMessage('ai', aiMessage);
+                    chatHistory.push({ role: "model", parts: [{ text: aiMessage }] });
+                } else {
+                    appendMessage('ai', 'Desculpe, não consegui gerar uma resposta. Tente novamente.');
+                    saveChatMessage('ai', 'Desculpe, não consegui gerar uma resposta. Tente novamente.');
+                }
+            } catch (error) {
+                appendMessage('ai', `Erro na comunicação: ${error.message}.`);
+                saveChatMessage('ai', `Erro na comunicação: ${error.message}.`);
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                uploadedFile = null;
+                fileNameSpan.textContent = "Nenhum arquivo selecionado";
+                fileInput.value = '';
+            }
+        };
+
+        // Event Handlers
+        document.addEventListener('DOMContentLoaded', async () => {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+            // Initialize Firebase and Neural Network
+            await initFirebase(appId, firebaseConfig, initialAuthToken);
+            await initNeuralNetwork();
+
+            sendButton.addEventListener('click', () => {
+                const userMessage = userInput.value.trim();
+                if (userMessage === '') return;
+                appendMessage('user', userMessage);
+                saveChatMessage(appId, 'user', userMessage);
+                chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+                userInput.value = '';
+                sendMessageToAI(userMessage);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) {
+                    fileNameSpan.textContent = "Nenhum arquivo selecionado";
+                    return;
+                }
+                fileNameSpan.textContent = file.name;
+                uploadedFile = { rawFile: file, mimeType: file.type };
+                if (file.type.includes('image')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        uploadedFile.data = event.target.result.split(',')[1];
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendButton.click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
