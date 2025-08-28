@@ -147,12 +147,12 @@
         let model;
         let vocab;
         
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const userInput = document.getElementById('user-input');
-        const fileInput = document.getElementById('file-input');
-        const fileNameSpan = document.getElementById('file-name');
-        const sendButton = document.getElementById('send-button');
-        const chatContainer = document.getElementById('chat-container');
+        let loadingIndicator;
+        let userInput;
+        let fileInput;
+        let fileNameSpan;
+        let sendButton;
+        let chatContainer;
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
@@ -488,6 +488,14 @@
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
             const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+            // Initialize DOM elements
+            loadingIndicator = document.getElementById('loading-indicator');
+            userInput = document.getElementById('user-input');
+            fileInput = document.getElementById('file-input');
+            fileNameSpan = document.getElementById('file-name');
+            sendButton = document.getElementById('send-button');
+            chatContainer = document.getElementById('chat-container');
 
             // Initialize Firebase and Neural Network
             await initFirebase(appId, firebaseConfig, initialAuthToken);
