@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -485,10 +485,6 @@
 
         // Event Handlers
         document.addEventListener('DOMContentLoaded', async () => {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
             // Initialize DOM elements
             loadingIndicator = document.getElementById('loading-indicator');
             userInput = document.getElementById('user-input');
@@ -496,6 +492,10 @@
             fileNameSpan = document.getElementById('file-name');
             sendButton = document.getElementById('send-button');
             chatContainer = document.getElementById('chat-container');
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
             // Initialize Firebase and Neural Network
             await initFirebase(appId, firebaseConfig, initialAuthToken);
