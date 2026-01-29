@@ -19,7 +19,12 @@ with st.sidebar:
     st.header("Configurações A.S.A.")
     
     # Input da API Key
-    api_key = st.text_input("Gemini API Key", type="password", help="Cole sua chave da API do Google Gemini aqui.")
+    # Tenta pegar dos segredos (secrets.toml ou Cloud Secrets)
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        st.success("✅ Chave de API carregada com segurança!")
+    else:
+        api_key = st.text_input("Gemini API Key", type="password", help="Cole sua chave da API do Google Gemini aqui.")
     
     if api_key:
         genai.configure(api_key=api_key)
