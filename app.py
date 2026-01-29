@@ -96,19 +96,12 @@ with st.sidebar:
         
     st.markdown("---")
     
-    # Configuração de Criatividade
-    criatividade = st.slider(
-        "Temperature (Criatividade)", 
-        min_value=0.0, 
-        max_value=1.0, 
-        value=0.7, 
-        step=0.1
-    )
-    st.caption(f"STATUS: {criatividade}")
+    # Configuração de Criatividade (Fixa)
+    st.markdown("STATUS: OPTIMIZED")
     
     st.markdown("---")
     st.markdown("SYSTEM: ONLINE")
-    st.markdown("VERSION: 2.1.0 (MATRIX)")
+    st.markdown("VERSION: 2.2.0 (MINIMAL)")
 
 # --- FUNÇÃO BACKEND (GEMINI) ---
 def processar_comando_asa(prompt, history):
@@ -117,7 +110,7 @@ def processar_comando_asa(prompt, history):
 
     try:
         generation_config = {
-            "temperature": criatividade,
+            "temperature": 0.7, # Valor fixo padrão
             "top_p": 0.95,
             "top_k": 64,
             "max_output_tokens": 8192,
